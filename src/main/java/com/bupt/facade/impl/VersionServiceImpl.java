@@ -2,6 +2,7 @@ package com.bupt.facade.impl;
 
 import com.bupt.dao.SysVersionDao;
 import com.bupt.entity.SysVersion;
+import com.bupt.facade.BussinessService;
 import com.bupt.facade.VersionService;
 import com.bupt.pojo.VersionDTO;
 import com.bupt.pojo.VersionDTOWithVersionDictDTO;
@@ -22,12 +23,12 @@ import tk.mybatis.mapper.entity.Example;
 
 import javax.annotation.Resource;
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service("versionService")
-public class VersionServiceImpl implements VersionService {
+class VersionServiceImpl implements VersionService {
     @Resource
     private SysVersionDao sysVersionDao;
     @Resource
@@ -74,13 +75,10 @@ public class VersionServiceImpl implements VersionService {
     @Override
     @Transactional
     public List<VersionDTO> listVersion() {
-        Iterator<SysVersion> sysVersionIterator = sysVersionDao.selectAll().iterator();
-        List<VersionDTO> resultList = new ArrayList<>();
-        while (sysVersionIterator.hasNext()) {
-            resultList.add(DOtoDTO(sysVersionIterator.next()));
-        }
+        List<VersionDTO> resultList = sysVersionDao.selectAll().stream().sorted(Comparator.comparing
+                (SysVersion::getGmtModified).reversed()).map(this::DOtoDTO).collect(Collectors.toList());
         if (resultList.size() == 0) {
-            throw new NoneGetException();
+            throw new NoneGetException("没有查询到版本相关记录！");
         }
         return resultList;
     }
@@ -89,7 +87,7 @@ public class VersionServiceImpl implements VersionService {
     public VersionDTOWithVersionDictDTO getVersion(Long versionId) {
         SysVersion sysVersionDO = sysVersionDao.selectByPrimaryKey(versionId);
         if (null == sysVersionDO) {
-            throw new NoneGetException();
+            throw new NoneGetException("没有从数据库中找到该版本记录！");
         }
         VersionDTOWithVersionDictDTO versionDTOWithVersionDictDTO = new VersionDTOWithVersionDictDTO(DOtoDTO(sysVersionDO));
         versionDTOWithVersionDictDTO.setVersionDict(versionDictService.getVersionDictByName(sysVersionDO.getVersionDictName()));

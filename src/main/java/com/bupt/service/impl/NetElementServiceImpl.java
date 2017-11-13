@@ -15,11 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 import tk.mybatis.mapper.entity.Example;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service("netElementService")
-public class NetElementServiceImpl implements NetElementService {
+class NetElementServiceImpl implements NetElementService {
     @Resource
     private ResNetElementDao resNetElementDao;
 
@@ -46,14 +47,11 @@ public class NetElementServiceImpl implements NetElementService {
 
     @Override
     public List<NetElementDTO> listNetElement(Long versionId) {
-        List<ResNetElement> resNetElementsList = resNetElementDao.selectByExample(getExample(versionId));
-        if (resNetElementsList.size() == 0) {
-            throw new NoneGetException();
-        }
-
-        List<NetElementDTO> resultList = new ArrayList<>();
-        for (ResNetElement aResNetElementsList : resNetElementsList) {
-            resultList.add(this.convertToNetElementDTO(aResNetElementsList));
+        List<NetElementDTO> resultList = resNetElementDao.selectByExample(getExample(versionId)).stream()
+                .sorted(Comparator.comparing(ResNetElement::getGmtModified).reversed()).map
+                        (this::convertToNetElementDTO).collect(Collectors.toList());
+        if (resultList.size() == 0) {
+            throw new NoneGetException("没有找到网元相关记录");
         }
         return resultList;
     }
@@ -62,7 +60,7 @@ public class NetElementServiceImpl implements NetElementService {
     public NetElementDTO updateNetElement(Long versionId, Long netElementId, NetElementCreateInfo netElementCreateInfo) {
         ResNetElement updateInfo = this.convertToResNetElement(netElementCreateInfo);
         if (resNetElementDao.updateByExampleSelective(updateInfo, getExample(versionId, netElementId)) == 1) {
-            return convertToNetElementDTO(resNetElementDao.selectOne(updateInfo));
+            return convertToNetElementDTO(resNetElementDao.selectByExample(getExample(versionId, netElementId)).get(0));
         }
         throw new NoneUpdateException();
     }
@@ -84,7 +82,7 @@ public class NetElementServiceImpl implements NetElementService {
     }
 
 
-    private Example getExample(Long versionId) {
+    public Example getExample(Long versionId) {
         Example example = new Example(ResNetElement.class);
         Example.Criteria criteria = example.createCriteria();
         criteria.andEqualTo("versionId", versionId);
@@ -100,7 +98,7 @@ public class NetElementServiceImpl implements NetElementService {
     @Override
     public NetElementDTO getNetElement(Long versionId, long netElementId) {
         if (null != resNetElementDao.selectByExample(getExample(versionId, netElementId))) {
-            return convertToNetElementDTO(resNetElementDao.selectByExample(getExample(versionId, netElementId)));
+            return convertToNetElementDTO(resNetElementDao.selectByExample(getExample(versionId, netElementId)).get(0));
         }
         throw new NoneGetException();
     }
@@ -108,7 +106,7 @@ public class NetElementServiceImpl implements NetElementService {
     @Override
     public NetElementDTO getNetElement(Long versionId, String netElementName) {
         List<ResNetElement> result = resNetElementDao.selectByExample(getExample(versionId, netElementName));
-        if (null != result || result.size() != 0) {
+        if (result.size() != 0) {
             return convertToNetElementDTO(result.get(0));
         }
         throw new NoneGetException("网元" + netElementName + "不存在");

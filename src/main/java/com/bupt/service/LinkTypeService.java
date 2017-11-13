@@ -43,7 +43,7 @@ public interface LinkTypeService {
      * @param versionId
      * @return
      */
-    List<LinkTypeDTO> selectLinkTypes(Long versionId);
+    List<LinkTypeDTO> listLinkTypes(Long versionId);
 
     /**
      * 获取指定链路类型的具体信息
@@ -54,6 +54,11 @@ public interface LinkTypeService {
      */
     LinkTypeDTO getLinkType(Long versionId, String linkType);
 
+
+    /**
+     * 根据ID获取链路类型
+     */
+    LinkTypeDTO getLinkTypeById(Long versionId, Long linkTypeId);
 
 
     /**

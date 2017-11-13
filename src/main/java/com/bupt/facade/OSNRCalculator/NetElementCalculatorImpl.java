@@ -11,7 +11,7 @@ import javax.annotation.Resource;
 import java.util.List;
 
 @Component
-public class NetElementCalculatorImpl implements NetElementCalculator {
+class NetElementCalculatorImpl implements NetElementCalculator {
     private List<DiskDTO> disks;
     private long versionId;
     private double[] inputPowers;
@@ -41,9 +41,6 @@ public class NetElementCalculatorImpl implements NetElementCalculator {
     @Override
     public void calculate(String netElementName, long versionId, double firstInput) throws IllegalArgumentException {
         init(netElementName, versionId, firstInput);
-        if (disks.size() == 0) {
-            throw new DiskNotFoundException(netElementName);
-        }
         for (int i = 0; i < this.disks.size() - 1; i++) {
             diskCalculator.calculate(this.disks.get(i), this.inputPowers[i], this.versionId);
             setPowers(i);
@@ -62,6 +59,9 @@ public class NetElementCalculatorImpl implements NetElementCalculator {
         }
         this.disks = diskService.listDiskByNetElement(versionId, netElementService.getNetElement(versionId, netElementName)
                 .getNetElementId());
+        if (disks.size() == 0) {
+            throw new DiskNotFoundException(netElementName);
+        }
         this.inputPowers = new double[this.disks.size()];
         this.outputPowers = new double[this.disks.size()];
         this.inputPowers[0] = firstInput;

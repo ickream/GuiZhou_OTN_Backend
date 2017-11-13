@@ -24,46 +24,38 @@ import java.util.List;
 
 @Service
 class NXAnalyseServiceImpl implements NXAnalyseService {
-
     @Autowired
     private ResNetElementDao netElementDao;
-
     @Autowired
     private ResLinkDao linkDao;
-
     @Autowired
     private ResBussinessDao bussinessDao;
 
     @Override
     public List<NXAnalyseItemDTO> analyseEquip(long versionId, int num) {
-
         List<ResNetElement> netElements = netElementDao.selectByExample(getExampleByVersion(versionId, ResNetElement.class));
         List<ResBussiness> bussiness = bussinessDao.selectByExample(getExampleByVersion(versionId, ResBussiness.class));
 
         List<NXAnalyseItemDTO> result = new LinkedList<>();
-        if (netElements.size() == 0 || bussiness.size() == 0) return null;
-
+        if (netElements.size() == 0 || bussiness.size() == 0) {
+            throw new NoneGetException("未查询到数据");
+        }
         if (1 == num) {
             for (ResNetElement netElement : netElements) {
-
                 NXAnalyseItemDTO nxAnalyseItem = analyse(bussiness, new String[]{netElement.getNetElementName()});
-
+                nxAnalyseItem.setItemName(netElement.getNetElementName());
                 result.add(nxAnalyseItem);
             }
-
         } else if (num == 2) {
             for (int i = 0; i < netElements.size(); i++) {
                 for (int j = i + 1; j < netElements.size(); j++) {
-
                     String eleA = netElements.get(i).getNetElementName();
                     String eleB = netElements.get(j).getNetElementName();
-
                     NXAnalyseItemDTO nxAnalyseItem = analyse(bussiness, new String[]{eleA, eleB});
-
+                    nxAnalyseItem.setItemName(eleA+","+eleB);
                     result.add(nxAnalyseItem);
                 }
             }
-
         }
         return result;
     }
@@ -73,10 +65,8 @@ class NXAnalyseServiceImpl implements NXAnalyseService {
         List<ResLink> links = linkDao.selectByExample(getExampleByVersion(versionId, ResLink.class));
         List<ResBussiness> bussiness = bussinessDao.selectByExample(getExampleByVersion(versionId, ResBussiness.class));
         if (links.size() == 0 || bussiness.size() == 0)
-            throw new NoneGetException();
-        // 结果
+            throw new NoneGetException("未查询到数据");
         List<NXAnalyseItemDTO> result = new LinkedList<>();
-
         if (num == 1) {
             for (ResLink link : links) {
                 //                链路的起止点在路由中不能确定，故有两种情况
@@ -84,7 +74,6 @@ class NXAnalyseServiceImpl implements NXAnalyseService {
                 String path2 = link.getEndZName() + "-" + link.getEndAName();
                 NXAnalyseItemDTO nxAnalyseItem = analyse(bussiness, new String[]{path1, path2});
                 nxAnalyseItem.setItemName(link.getLinkName());
-
                 result.add(nxAnalyseItem);
             }
         } else if (num == 2) {
@@ -95,14 +84,11 @@ class NXAnalyseServiceImpl implements NXAnalyseService {
                     String pathZ1 = links.get(j).getEndAName() + "-" + links.get(j).getEndZName();
                     String pathZ2 = links.get(j).getEndZName() + "-" + links.get(j).getEndAName();
                     NXAnalyseItemDTO nxAnalyseItem = analyse(bussiness, new String[]{pathA1, pathA2, pathZ1, pathZ2});
-
                     nxAnalyseItem.setItemName(pathA1 + "," + pathZ1);
                     result.add(nxAnalyseItem);
-
                 }
             }
         }
-
         return result;
     }
 
@@ -111,8 +97,9 @@ class NXAnalyseServiceImpl implements NXAnalyseService {
         List<ResLink> links = linkDao.selectByExample(getExampleByVersion(versionId, ResLink.class));
         List<ResBussiness> bussinesses = bussinessDao.selectByExample(getExampleByVersion(versionId, ResBussiness.class));
         List<ResNetElement> netElements = netElementDao.selectByExample(getExampleByVersion(versionId, ResNetElement.class));
-        if (netElements.size() == 0 || bussinesses.size() == 0 || links.size() == 0) return null;
-        // 结果
+        if (netElements.size() == 0 || bussinesses.size() == 0 || links.size() == 0) {
+            throw new NoneGetException("未查询到数据");
+        }
         List<NXAnalyseItemDTO> result = new LinkedList<>();
         for (ResNetElement netElement : netElements) {
             for (ResLink link : links) {
@@ -130,22 +117,11 @@ class NXAnalyseServiceImpl implements NXAnalyseService {
 
     private NXAnalyseItemDTO analyse(List<ResBussiness> resBussinesses, String items[]) {
         NXAnalyseItemDTO nxAnalyseItem = new NXAnalyseItemDTO();
-
-        DecimalFormat decimalFormat = new DecimalFormat("0.00%");
-
         List<String> affectBusiness = new ArrayList<>();
         List<String> recoveryBusiness = new ArrayList<>();
         nxAnalyseItem.setAffectBussiness(affectBusiness);
         nxAnalyseItem.setRecoveryBussiness(recoveryBusiness);
 
-        //设置故障名称
-        String itemName = items[0];
-        for (int i = 1; i < items.length; i++) {
-            itemName = itemName + "," + items[i];
-        }
-        nxAnalyseItem.setItemName(itemName);
-
-        //遍历每个业务
         for (ResBussiness resBussiness : resBussinesses) {
             String mainRoute = resBussiness.getMainRoute();
             String spareRoute = resBussiness.getSpareRoute();
@@ -159,7 +135,7 @@ class NXAnalyseServiceImpl implements NXAnalyseService {
                     break;
                 }
             }
-//            在主路由里找到某个故障设备或链路后备用路由不存在
+//            在主路由里找到某个故障设备且链路备用路由不存在
 //            或者备用路由里也有某个故障设备或链路，则判定为不可恢复
             if (affectFlag) {
                 for (String item : items) {
@@ -170,16 +146,22 @@ class NXAnalyseServiceImpl implements NXAnalyseService {
                 }
                 if (recFlag) recoveryBusiness.add(resBussiness.getBussinessName());
             }
-
         }
-//        计算恢复率
+        computeRecRate(nxAnalyseItem);
+        return nxAnalyseItem;
+    }
+
+    private void computeRecRate(NXAnalyseItemDTO nxAnalyseItem){
+        DecimalFormat decimalFormat = new DecimalFormat("0.00%");
+        List<String> affectBusiness = nxAnalyseItem.getAffectBussiness();
+        List<String> recoveryBusiness = nxAnalyseItem.getRecoveryBussiness();
+        //        计算恢复率
         if (affectBusiness.size() == 0)
             nxAnalyseItem.setRecoveryRate("100.00%");
         else {
             double recoveryRate = (double) recoveryBusiness.size() / affectBusiness.size();
             nxAnalyseItem.setRecoveryRate(decimalFormat.format(recoveryRate));
         }
-        return nxAnalyseItem;
     }
 
     private Example getExampleByVersion(Long versionId, Class<?> className) {
@@ -189,5 +171,4 @@ class NXAnalyseServiceImpl implements NXAnalyseService {
 
         return example;
     }
-
 }
